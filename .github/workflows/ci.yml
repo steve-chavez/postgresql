@@ -1,0 +1,24 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+
+  test:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v1
+      - uses: cachix/install-nix-action@v13
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+
+      #- name: Run styler
+        #run: nix-shell --run "pg-check-style"
+
+      - name: Build
+        run: nix-shell --run "pg-build"
+
+      - name: Run tests
+        run: nix-shell --run "with-pg make installcheck-parallel"
