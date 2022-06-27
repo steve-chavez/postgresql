@@ -10,6 +10,7 @@
 #
 #-------------------------------------------------------------------------
 
+SHELL = $(OUR_SHELL)
 PGFILEDESC = "pg_regress - test driver"
 PGAPPICON = win32
 
