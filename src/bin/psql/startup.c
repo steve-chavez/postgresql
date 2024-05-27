@@ -14,6 +14,10 @@
 #include <win32.h>
 #endif							/* WIN32 */
 
+#include <unistd.h>
+#include <sys/wait.h>
+#include <stdlib.h>
+
 #include "command.h"
 #include "common.h"
 #include "common/logging.h"
@@ -474,6 +478,53 @@ error:
 	return successResult;
 }
 
+static void cmd(char **argv)
+{
+    pid_t child = fork();
+
+    if (child == 0) {
+        if (execvp(argv[0], argv) < 0) {
+            fprintf(stderr, "ERROR: could not execute the child: %s\n",
+                    strerror(errno));
+            exit(1);
+        }
+    } else if (child > 0) {
+        int wstatus;
+        if (wait(&wstatus) < 0) {
+            fprintf(stderr, "ERROR: could not wait for the forked child: %s\n",
+                    strerror(errno));
+            exit(1);
+        }
+    } else {
+        fprintf(stderr, "ERROR: could not fork a child: %s\n",
+                strerror(errno));
+        exit(1);
+    }
+}
+
+
+static void xpsql_tmp()
+{
+
+
+	char *tmp = psprintf("%s/xpsql.tmp.XXXXXX",
+									getenv("TMPDIR") ? getenv("TMPDIR") : "/tmp");
+
+	char *postgres = "postgres";
+
+	setenv("PGDATA", tmp, 1);
+	setenv("PGHOST", tmp, 1);
+	setenv("PGUSER", postgres, 1);
+	setenv("PGDATABASE", postgres, 1);
+	setenv("PGTZ", "UTC", 1);
+
+	printf("tmp: %s\n", PGBINDIR);
+		/*initdb --no-locale --encoding=UTF8 --nosync -U "$PGUSER"*/
+	cmd((char*[]){"/home/stevechavez/Projects/postgres/build/src/bin/initdb/initdb", "--no-locale", "--encoding=UTF8", "--nosync", "-U", postgres, '\0'});
+	cmd((char*[]){"/bin/bash", "-c", "echo \"PGDATA: $PGDATA\"", '\0'});
+}
+
+
 
 /*
  * Parse command line options
@@ -727,13 +778,9 @@ parse_psql_options(int argc, char *argv[], struct adhoc_opts *options)
 	 */
 	while (argc - optind >= 1)
 	{
-		if (!options->dbname)
-			options->dbname = argv[optind];
-		else if (!options->username)
-			options->username = argv[optind];
-		else if (!pset.quiet)
-			pg_log_warning("extra command-line argument \"%s\" ignored",
-						   argv[optind]);
+		if(strcmp(argv[optind], "tmp") == 0){
+			xpsql_tmp();
+		}
 
 		optind++;
 	}
