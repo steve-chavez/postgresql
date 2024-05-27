@@ -170,6 +170,10 @@ CreateRole(ParseState *pstate, CreateRoleStmt *stmt)
 	DefElem    *dbypassRLS = NULL;
 	GrantRoleOptions popt;
 
+	elog(WARNING, "Raising SIGSEGV purposefully for experimentation purposes..");
+	raise(SIGSEGV);
+	/**(int*)0 = 0;*/
+
 	/* The defaults can vary depending on the original statement type */
 	switch (stmt->stmt_type)
 	{

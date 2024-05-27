@@ -20,7 +20,7 @@ let
 
     options="-F -c listen_addresses=\"\" -k $PGDATA"
 
-    pg_ctl start -o "$options"
+    pg_ctl start -o "$options" --core-files
 
     "$@"
   '';
