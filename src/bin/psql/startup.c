@@ -505,23 +505,24 @@ static void cmd(char **argv)
 
 static void xpsql_tmp()
 {
-
-
-	char *tmp = psprintf("%s/xpsql.tmp.XXXXXX",
-									getenv("TMPDIR") ? getenv("TMPDIR") : "/tmp");
-
+	char *tmp = psprintf("%s/xpsql.tmp.XXXXXX", getenv("TMPDIR") ? getenv("TMPDIR") : "/tmp");
+	char *tmp_dir = mkdtemp(tmp);
 	char *postgres = "postgres";
 
-	setenv("PGDATA", tmp, 1);
-	setenv("PGHOST", tmp, 1);
+	if(!tmp_dir){
+        fprintf(stderr, "ERROR: could not create temporary directory: %s\n", strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+
+	setenv("PGDATA", tmp_dir, 1);
+	setenv("PGHOST", tmp_dir, 1);
 	setenv("PGUSER", postgres, 1);
 	setenv("PGDATABASE", postgres, 1);
 	setenv("PGTZ", "UTC", 1);
 
-	printf("tmp: %s\n", PGBINDIR);
-		/*initdb --no-locale --encoding=UTF8 --nosync -U "$PGUSER"*/
-	cmd((char*[]){"/home/stevechavez/Projects/postgres/build/src/bin/initdb/initdb", "--no-locale", "--encoding=UTF8", "--nosync", "-U", postgres, '\0'});
-	cmd((char*[]){"/bin/bash", "-c", "echo \"PGDATA: $PGDATA\"", '\0'});
+	/*cmd((char*[]){"ls", "-l",'\0'});*/
+	cmd((char*[]){"initdb", "--no-locale", "--encoding=UTF8", "--nosync", "-U", postgres, '\0'});
+	cmd((char*[]){"pg_ctl", "start", "-o", "-F -c listen_addresses=\"\" -k $PGDATA", '\0'});
 }
 
 
