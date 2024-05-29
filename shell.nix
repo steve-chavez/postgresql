@@ -94,5 +94,6 @@ mkShell {
   shellHook = ''
     export HISTFILE=.history
     export OUR_SHELL="${bash}/bin/bash"
+    export PATH="$PATH:$PWD/build/bin"
   '';
 }
