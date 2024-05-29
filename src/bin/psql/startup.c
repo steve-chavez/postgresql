@@ -118,7 +118,7 @@ log_locus_callback(const char **filename, uint64 *lineno)
 	}
 }
 
-static void cmd(char **argv)
+static void cmd(char *argv[])
 {
     pid_t child = fork();
 
@@ -286,6 +286,21 @@ main(int argc, char *argv[])
 	SetVariableBool(pset.vars, "SHOW_ALL_RESULTS");
 
 	parse_psql_options(argc, argv, &options);
+
+	while (argc - optind >= 1)
+	{
+		if(strcmp(argv[optind], "tmp") == 0){
+			xpsql_tmp();
+			if(argc > 2){
+				char **new_argv = argv + 2;
+				cmd(new_argv);
+				successResult = EXIT_SUCCESS;
+				goto finish;
+			}
+		}
+
+		optind++;
+	}
 
 	/*
 	 * If no action was specified and we're in non-interactive mode, treat it
@@ -552,6 +567,7 @@ error:
 		PQfinish(pset.dead_conn);
 	setQFout(NULL);
 
+finish:
 	if(!off)
 		cmd((char*[]){"pg_ctl", "stop", "-m", "i", "-D", tmp_dir, '\0'});
 
@@ -810,18 +826,6 @@ parse_psql_options(int argc, char *argv[], struct adhoc_opts *options)
 								  pset.progname);
 				exit(EXIT_FAILURE);
 		}
-	}
-
-	/*
-	 * if we still have arguments, use it as the database name and username
-	 */
-	while (argc - optind >= 1)
-	{
-		if(strcmp(argv[optind], "tmp") == 0){
-			xpsql_tmp();
-		}
-
-		optind++;
 	}
 }
 
