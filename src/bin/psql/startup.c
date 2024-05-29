@@ -118,26 +118,6 @@ log_locus_callback(const char **filename, uint64 *lineno)
 	}
 }
 
-#ifndef WIN32
-static void
-empty_signal_handler(SIGNAL_ARGS)
-{
-}
-#endif
-
-/* Call-back to the 'remove()' function called by nftw() */
-static int
-remove_callback(const char *pathname,
-                const struct stat *sbuf,
-                int type,
-                struct FTW *ftwb)
-{
-  (void)sbuf;
-  (void)type;
-  (void)ftwb;
-  return remove (pathname);
-}
-
 static void cmd(char **argv)
 {
     pid_t child = fork();
@@ -162,7 +142,6 @@ static void cmd(char **argv)
     }
 }
 
-
 static void xpsql_tmp()
 {
 	char *tmp = psprintf("%s/xpsql.tmp.XXXXXX", getenv("TMPDIR") ? getenv("TMPDIR") : "/tmp");
@@ -182,6 +161,40 @@ static void xpsql_tmp()
 
 	cmd((char*[]){"initdb", "--no-locale", "--encoding=UTF8", "--nosync", "-U", postgres, '\0'});
 	cmd((char*[]){"pg_ctl", "start", "-o", "-F -c listen_addresses=\"\" -k $PGDATA", '\0'});
+}
+
+#ifndef WIN32
+static void
+empty_signal_handler(SIGNAL_ARGS)
+{
+}
+
+static volatile bool off = false;
+
+static void usr1_handler(SIGNAL_ARGS)
+{
+    if (postgres_signal_arg == SIGUSR1)
+    {
+		off =!off;
+		if(off)
+        	cmd((char*[]){"pg_ctl", "stop", "-m", "i", "-D", tmp_dir, '\0'});
+		else
+			cmd((char*[]){"pg_ctl", "start", "-o", "-F -c listen_addresses=\"\" -k $PGDATA", '\0'});
+    }
+}
+#endif
+
+/* Call-back to the 'remove()' function called by nftw() */
+static int
+remove_callback(const char *pathname,
+                const struct stat *sbuf,
+                int type,
+                struct FTW *ftwb)
+{
+  (void)sbuf;
+  (void)type;
+  (void)ftwb;
+  return remove (pathname);
 }
 
 /*
@@ -385,6 +398,7 @@ main(int argc, char *argv[])
 	 */
 	pqsignal(SIGCHLD, empty_signal_handler);
 	pqsignal(SIGALRM, empty_signal_handler);
+	pqsignal(SIGUSR1, usr1_handler);
 #endif
 
 	PQsetNoticeProcessor(pset.db, NoticeProcessor, NULL);
@@ -538,7 +552,8 @@ error:
 		PQfinish(pset.dead_conn);
 	setQFout(NULL);
 
-	cmd((char*[]){"pg_ctl", "stop", "-m", "i", "-D", tmp_dir, '\0'});
+	if(!off)
+		cmd((char*[]){"pg_ctl", "stop", "-m", "i", "-D", tmp_dir, '\0'});
 
   	if (nftw (tmp_dir, remove_callback, FOPEN_MAX,
             FTW_DEPTH | FTW_MOUNT | FTW_PHYS) < 0)
