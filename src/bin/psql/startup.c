@@ -118,9 +118,21 @@ log_locus_callback(const char **filename, uint64 *lineno)
 	}
 }
 
+#ifndef WIN32
+static void
+empty_signal_handler(SIGNAL_ARGS)
+{
+}
+
+static volatile bool off = false;
+#endif
+
 static void cmd(char *argv[])
 {
     pid_t child = fork();
+
+    //prevent ctrl+c from interrupting
+    pqsignal(SIGINT, empty_signal_handler);
 
     if (child == 0) {
         if (execvp(argv[0], argv) < 0) {
@@ -164,13 +176,6 @@ static void xpsql_tmp()
 }
 
 #ifndef WIN32
-static void
-empty_signal_handler(SIGNAL_ARGS)
-{
-}
-
-static volatile bool off = false;
-
 static void usr1_handler(SIGNAL_ARGS)
 {
     if (postgres_signal_arg == SIGUSR1)
