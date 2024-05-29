@@ -17,6 +17,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <stdlib.h>
+#include <ftw.h>
 
 #include "command.h"
 #include "common.h"
@@ -81,6 +82,9 @@ struct adhoc_opts
 	SimpleActionList actions;
 };
 
+
+static char *tmp_dir = NULL;
+
 static void parse_psql_options(int argc, char *argv[],
 							   struct adhoc_opts *options);
 static void simple_action_list_append(SimpleActionList *list,
@@ -120,6 +124,65 @@ empty_signal_handler(SIGNAL_ARGS)
 {
 }
 #endif
+
+/* Call-back to the 'remove()' function called by nftw() */
+static int
+remove_callback(const char *pathname,
+                const struct stat *sbuf,
+                int type,
+                struct FTW *ftwb)
+{
+  (void)sbuf;
+  (void)type;
+  (void)ftwb;
+  return remove (pathname);
+}
+
+static void cmd(char **argv)
+{
+    pid_t child = fork();
+
+    if (child == 0) {
+        if (execvp(argv[0], argv) < 0) {
+            fprintf(stderr, "ERROR: could not execute the child: %s\n",
+                    strerror(errno));
+            exit(1);
+        }
+    } else if (child > 0) {
+        int wstatus;
+        if (wait(&wstatus) < 0) {
+            fprintf(stderr, "ERROR: could not wait for the forked child: %s\n",
+                    strerror(errno));
+            exit(1);
+        }
+    } else {
+        fprintf(stderr, "ERROR: could not fork a child: %s\n",
+                strerror(errno));
+        exit(1);
+    }
+}
+
+
+static void xpsql_tmp()
+{
+	char *tmp = psprintf("%s/xpsql.tmp.XXXXXX", getenv("TMPDIR") ? getenv("TMPDIR") : "/tmp");
+	char *postgres = "postgres";
+	tmp_dir = mkdtemp(tmp);
+
+	if(!tmp_dir){
+        fprintf(stderr, "ERROR: could not create temporary directory: %s\n", strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+
+	setenv("PGDATA", tmp_dir, 1);
+	setenv("PGHOST", tmp_dir, 1);
+	setenv("PGUSER", postgres, 1);
+	setenv("PGDATABASE", postgres, 1);
+	setenv("PGTZ", "UTC", 1);
+
+	cmd((char*[]){"initdb", "--no-locale", "--encoding=UTF8", "--nosync", "-U", postgres, '\0'});
+	cmd((char*[]){"pg_ctl", "start", "-o", "-F -c listen_addresses=\"\" -k $PGDATA", '\0'});
+}
 
 /*
  *
@@ -475,57 +538,17 @@ error:
 		PQfinish(pset.dead_conn);
 	setQFout(NULL);
 
+	cmd((char*[]){"pg_ctl", "stop", "-m", "i", "-D", tmp_dir, '\0'});
+
+  	if (nftw (tmp_dir, remove_callback, FOPEN_MAX,
+            FTW_DEPTH | FTW_MOUNT | FTW_PHYS) < 0)
+    {
+		printf("ERROR: could not remove the tmp dir: %s\n",
+				strerror(errno));
+    }
+
 	return successResult;
 }
-
-static void cmd(char **argv)
-{
-    pid_t child = fork();
-
-    if (child == 0) {
-        if (execvp(argv[0], argv) < 0) {
-            fprintf(stderr, "ERROR: could not execute the child: %s\n",
-                    strerror(errno));
-            exit(1);
-        }
-    } else if (child > 0) {
-        int wstatus;
-        if (wait(&wstatus) < 0) {
-            fprintf(stderr, "ERROR: could not wait for the forked child: %s\n",
-                    strerror(errno));
-            exit(1);
-        }
-    } else {
-        fprintf(stderr, "ERROR: could not fork a child: %s\n",
-                strerror(errno));
-        exit(1);
-    }
-}
-
-
-static void xpsql_tmp()
-{
-	char *tmp = psprintf("%s/xpsql.tmp.XXXXXX", getenv("TMPDIR") ? getenv("TMPDIR") : "/tmp");
-	char *tmp_dir = mkdtemp(tmp);
-	char *postgres = "postgres";
-
-	if(!tmp_dir){
-        fprintf(stderr, "ERROR: could not create temporary directory: %s\n", strerror(errno));
-        exit(EXIT_FAILURE);
-    }
-
-	setenv("PGDATA", tmp_dir, 1);
-	setenv("PGHOST", tmp_dir, 1);
-	setenv("PGUSER", postgres, 1);
-	setenv("PGDATABASE", postgres, 1);
-	setenv("PGTZ", "UTC", 1);
-
-	/*cmd((char*[]){"ls", "-l",'\0'});*/
-	cmd((char*[]){"initdb", "--no-locale", "--encoding=UTF8", "--nosync", "-U", postgres, '\0'});
-	cmd((char*[]){"pg_ctl", "start", "-o", "-F -c listen_addresses=\"\" -k $PGDATA", '\0'});
-}
-
-
 
 /*
  * Parse command line options
