@@ -287,6 +287,10 @@ main(int argc, char *argv[])
 
 	parse_psql_options(argc, argv, &options);
 
+#ifndef WIN32
+	pqsignal(SIGUSR1, usr1_handler);
+#endif
+
 	while (argc - optind >= 1)
 	{
 		if(strcmp(argv[optind], "tmp") == 0){
