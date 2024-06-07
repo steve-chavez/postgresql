@@ -31,7 +31,7 @@ let
 
     export OUR_SHELL="${bash}/bin/bash"
 
-    [ ! -d build ] && ./configure --enable-cassert --enable-tap-tests --prefix ${prefix} --with-CC="ccache gcc" --with-perl --with-tcl --with-python
+    [ ! -d build ] && ./configure CFLAGS="-ggdb -Og -g3 -fno-omit-frame-pointer" --enable-cassert --enable-tap-tests --prefix ${prefix} --with-CC="ccache gcc" --with-perl --with-tcl --with-python
 
     echo 'Building pg...'
 
@@ -80,6 +80,7 @@ mkShell {
   buildInputs = [
     readline zlib bison flex ctags ccache git icu pkg-config perl
     docbook_xml_dtd_45 libxml2 libxslt # for docs
+    valgrind
     tcl
     python3Full
     perlPackages.IPCRun
@@ -95,6 +96,9 @@ mkShell {
     docsScript
     tapTestScript
     commitPatch
+    linuxPackages.perf
+    linuxPackages.bpftrace
+    linuxHeaders
   ];
   shellHook = ''
     export HISTFILE=.history

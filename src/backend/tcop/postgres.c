@@ -4464,6 +4464,10 @@ PostgresMain(const char *dbname, const char *username)
 		int			firstchar;
 		StringInfoData input_message;
 
+		 #define CHUNKSIZE 4096
+		 char* waste = palloc(CHUNKSIZE);
+		 printf("%d from %d\n", CHUNKSIZE, getpid());
+
 		/*
 		 * At top of loop, reset extended-query-message flag, so that any
 		 * errors encountered in "idle" state don't provoke skip.
