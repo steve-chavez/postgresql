@@ -1,0 +1,65 @@
+-- setup roles and privileges
+create role evtrig_owner;
+create role member_1;
+create role member_2;
+grant evtrig_owner to member_1;
+grant evtrig_owner to member_2;
+create role non_member;
+grant all on schema public to evtrig_owner, member_1, member_2, non_member;
+\echo
+
+-- create nonsuper event trigger
+set role evtrig_owner;
+create function show_current_user()
+    returns event_trigger
+    language plpgsql as
+$$
+begin
+    raise notice 'the event trigger is executed for %', current_user;
+end;
+$$;
+create event trigger evtrig_show_current_user_1
+   on ddl_command_start
+   execute procedure show_current_user();
+reset role;
+\echo
+
+-- create super event trigger and alter it to be nonsuper
+create event trigger evtrig_show_current_user_2
+   on ddl_command_end
+   execute procedure show_current_user();
+alter event trigger evtrig_show_current_user_2 owner to evtrig_owner;
+\echo
+
+-- evtrig should not fire for superusers
+select current_setting('is_superuser');
+create table evtrig_quux();
+\echo
+
+-- evtrig should fire for members
+set role member_1;
+create table evtrig_foo();
+\echo
+
+set role member_2;
+create table evtrig_bar();
+\echo
+
+-- evtrig should not fire for non-members
+set role non_member;
+create table evtrig_qux();
+\echo
+
+-- cleanup
+reset role;
+drop table evtrig_qux;
+drop table evtrig_bar;
+drop table evtrig_foo;
+revoke all on schema public from member_1, member_2, non_member, evtrig_owner;
+drop event trigger evtrig_show_current_user_1;
+drop event trigger evtrig_show_current_user_2;
+drop function show_current_user();
+drop role member_1;
+drop role member_2;
+drop role non_member;
+drop role evtrig_owner;
